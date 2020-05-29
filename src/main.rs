@@ -26,7 +26,7 @@ fn main() {
     env_logger::init();
     let event_loop = EventLoop::new();
     let window = Window::new(&event_loop).unwrap();
-    futures::executor::block_on(run(event_loop, window));
+    pollster::block_on(run(event_loop, window));
 }
 
 async fn run(event_loop: EventLoop<()>, window: Window) {
