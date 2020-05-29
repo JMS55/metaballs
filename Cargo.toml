@@ -1,0 +1,11 @@
+[package]
+name = "metaballs"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+wgpu = "0.5"
+winit = "0.22"
+futures = "0.3"
+bytemuck = "1.2"
+env_logger = "0.7"
