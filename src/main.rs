@@ -2,7 +2,7 @@ use bytemuck::{Pod, Zeroable};
 use std::io::Cursor;
 use std::time::Instant;
 use wgpu::*;
-use winit::event::{Event, WindowEvent};
+use winit::event::{ElementState, Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::Window;
 
@@ -13,6 +13,14 @@ struct TimeUniform {
 }
 unsafe impl Zeroable for TimeUniform {}
 unsafe impl Pod for TimeUniform {}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct ZoomUniform {
+    zoom: f32,
+}
+unsafe impl Zeroable for ZoomUniform {}
+unsafe impl Pod for ZoomUniform {}
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -94,6 +102,12 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         BufferUsage::UNIFORM | BufferUsage::COPY_DST,
     );
 
+    let mut zoom_uniform = ZoomUniform { zoom: 1.0 };
+    let zoom_uniform_buffer = device.create_buffer_with_data(
+        bytemuck::cast_slice(&[zoom_uniform]),
+        BufferUsage::UNIFORM | BufferUsage::COPY_DST,
+    );
+
     let mut screen_size_uniform = ScreenSizeUniform {
         screen_size: [screen_size.width as f32, screen_size.height as f32],
     };
@@ -114,6 +128,11 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 visibility: ShaderStage::FRAGMENT,
                 ty: BindingType::UniformBuffer { dynamic: false },
             },
+            BindGroupLayoutEntry {
+                binding: 2,
+                visibility: ShaderStage::FRAGMENT,
+                ty: BindingType::UniformBuffer { dynamic: false },
+            },
         ],
         label: None,
     });
@@ -129,6 +148,13 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
             },
             Binding {
                 binding: 1,
+                resource: BindingResource::Buffer {
+                    buffer: &zoom_uniform_buffer,
+                    range: 0..std::mem::size_of_val(&zoom_uniform) as BufferAddress,
+                },
+            },
+            Binding {
+                binding: 2,
                 resource: BindingResource::Buffer {
                     buffer: &screen_size_uniform_buffer,
                     range: 0..std::mem::size_of_val(&screen_size_uniform) as BufferAddress,
@@ -249,10 +275,58 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 }
                 queue.submit(&[encoder.finish()]);
             }
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                ..
-            } => *control_flow = ControlFlow::Exit,
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                WindowEvent::KeyboardInput { input, .. } => {
+                    if input.state == ElementState::Pressed {
+                        match input.virtual_keycode {
+                            Some(VirtualKeyCode::Equals) => {
+                                zoom_uniform.zoom *= 2.0;
+                                let mut encoder =
+                                    device.create_command_encoder(&CommandEncoderDescriptor {
+                                        label: None,
+                                    });
+                                let staging_buffer = device.create_buffer_with_data(
+                                    bytemuck::cast_slice(&[zoom_uniform]),
+                                    BufferUsage::COPY_SRC,
+                                );
+                                encoder.copy_buffer_to_buffer(
+                                    &staging_buffer,
+                                    0,
+                                    &zoom_uniform_buffer,
+                                    0,
+                                    std::mem::size_of::<ZoomUniform>() as BufferAddress,
+                                );
+                                queue.submit(&[encoder.finish()]);
+                            }
+                            Some(VirtualKeyCode::Minus) => {
+                                zoom_uniform.zoom /= 2.0;
+                                if zoom_uniform.zoom < 1.0 {
+                                    zoom_uniform.zoom = 1.0;
+                                }
+                                let mut encoder =
+                                    device.create_command_encoder(&CommandEncoderDescriptor {
+                                        label: None,
+                                    });
+                                let staging_buffer = device.create_buffer_with_data(
+                                    bytemuck::cast_slice(&[zoom_uniform]),
+                                    BufferUsage::COPY_SRC,
+                                );
+                                encoder.copy_buffer_to_buffer(
+                                    &staging_buffer,
+                                    0,
+                                    &zoom_uniform_buffer,
+                                    0,
+                                    std::mem::size_of::<ZoomUniform>() as BufferAddress,
+                                );
+                                queue.submit(&[encoder.finish()]);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
+            },
             _ => {}
         }
     });

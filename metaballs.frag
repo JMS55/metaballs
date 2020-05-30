@@ -3,7 +3,10 @@
 layout(set = 0, binding = 0) uniform TimeUniform {
     float time;
 };
-layout(set = 0, binding = 1) uniform ScreenSizeUniform {
+layout(set = 0, binding = 1) uniform ZoomUniform {
+    float zoom;
+};
+layout(set = 0, binding = 2) uniform ScreenSizeUniform {
     vec2 screen_size;
 };
 
@@ -44,7 +47,7 @@ void main() {
     vec3 n = (n1 + n2 + n3 + n4) / m;
 
     color = vec4(0.2, 0.2, 0.2, 1.0);
-    if (m >= 70.0) {
+    if (m >= 70.0 * zoom) {
         color.rgb = (n * 5.0).gbr;
     }
 }
